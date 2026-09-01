@@ -2,7 +2,6 @@ import json
 import os
 import hashlib
 import urllib.request
-import urllib.error
 from datetime import datetime, timezone, timedelta
 
 CONFIG_URL = "https://clientconfig.rpg.riotgames.com/api/v1/config/public"
@@ -10,8 +9,8 @@ STATE_FILE = "vanguard_state.json"
 
 WEBHOOK = os.environ["DISCORD_WEBHOOK"]
 
-RIOT_USER_AGENT = "VanguardMonitor/3.1"
-DISCORD_USER_AGENT = "DiscordBot (VanguardMonitor, 3.1)"
+RIOT_USER_AGENT = "VanguardMonitor/3.2"
+DISCORD_USER_AGENT = "DiscordBot (VanguardMonitor, 3.2)"
 KST = timezone(timedelta(hours=9))
 
 
@@ -20,6 +19,7 @@ def riot_request(url, method="GET", headers=None):
         "User-Agent": RIOT_USER_AGENT,
         "Accept": "*/*",
     }
+
     if headers:
         final_headers.update(headers)
 
@@ -34,6 +34,7 @@ def sha256_text(text):
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+# 상태 저장
 def load_state():
     try:
         with open(STATE_FILE, "r", encoding="utf-8") as f:
@@ -47,6 +48,7 @@ def save_state(state):
         json.dump(state, f, ensure_ascii=False, indent=2, sort_keys=True)
 
 
+# Vanguard 설정 조회
 def get_vanguard_config():
     req = riot_request(CONFIG_URL)
 
@@ -64,6 +66,7 @@ def get_vanguard_config():
 
     if not version:
         raise RuntimeError("Vanguard version을 찾지 못했습니다.")
+
     if not url_template:
         raise RuntimeError("Vanguard setup URL을 찾지 못했습니다.")
 
@@ -84,22 +87,26 @@ def get_vanguard_config():
     }
 
 
+# 설치 파일 정보 조회
 def get_installer_metadata(url):
     try:
         req = riot_request(url, method="HEAD")
+
         with urllib.request.urlopen(req, timeout=30) as response:
             return {
                 "etag": response.headers.get("ETag", ""),
                 "last_modified": response.headers.get("Last-Modified", ""),
                 "content_length": response.headers.get("Content-Length", ""),
             }
-    except Exception as head_error:
-        print("HEAD request failed, trying ranged GET:", head_error)
 
-    # 일부 CDN이 HEAD를 거부하는 경우 1바이트만 요청해 메타데이터를 확인합니다.
+    except Exception as head_error:
+        print("HEAD failed, trying ranged GET:", head_error)
+
     req = riot_request(url, headers={"Range": "bytes=0-0"})
+
     with urllib.request.urlopen(req, timeout=30) as response:
         total_size = response.headers.get("Content-Range", "")
+
         if "/" in total_size:
             total_size = total_size.rsplit("/", 1)[-1]
         else:
@@ -112,8 +119,9 @@ def get_installer_metadata(url):
         }
 
 
+# 실제 파일 SHA-256 확인
 def download_and_hash(url):
-    print("Downloading Vanguard setup.exe for SHA-256 verification...")
+    print("Checking setup.exe SHA-256...")
 
     digest = hashlib.sha256()
     size = 0
@@ -121,8 +129,10 @@ def download_and_hash(url):
     with urllib.request.urlopen(riot_request(url), timeout=300) as response:
         while True:
             chunk = response.read(1024 * 1024)
+
             if not chunk:
                 break
+
             digest.update(chunk)
             size += len(chunk)
 
@@ -133,22 +143,24 @@ def get_extra_config_changes(old, new):
     old_config = old.get("vanguard_config", {})
     new_config = new.get("vanguard_config", {})
 
-    # 버전과 URL은 따로 표시하므로 여기서는 제외합니다.
     ignored = {
         "anticheat.vanguard.version",
         "anticheat.vanguard.url",
     }
 
     changed = []
+
     for key in set(old_config) | set(new_config):
         if key in ignored:
             continue
+
         if old_config.get(key) != new_config.get(key):
             changed.append(key)
 
     return sorted(changed)
 
 
+# Discord 알림
 def send_discord(previous, current, items, version_changed):
     now = datetime.now(KST).strftime("%Y-%m-%d %H:%M KST")
 
@@ -169,13 +181,14 @@ def send_discord(previous, current, items, version_changed):
         "🔎 **감지 항목**\n"
         f"`{item_text}`\n\n"
         f"🕒 `{now}`\n\n"
+        "@everyone\n\n"
         "-# made by jnior"
     )
 
     payload = json.dumps(
         {
             "content": content,
-            "allowed_mentions": {"parse": []},
+            "allowed_mentions": {"parse": ["everyone"]},
         }
     ).encode("utf-8")
 
@@ -216,16 +229,18 @@ def main():
         "last_deep_check": "",
     }
 
-    # 첫 실행은 현재 실제 파일의 해시를 기준값으로 저장합니다.
+    # 첫 실행
     if previous is None:
         file_hash, downloaded_size = download_and_hash(current["setup_url"])
         current["file_sha256"] = file_hash
+
         if not current["content_length"]:
             current["content_length"] = str(downloaded_size)
+
         current["last_deep_check"] = today
         save_state(current)
-        print("Initial Vanguard state saved.")
-        print("Version:", current["version"])
+
+        print("Initial state saved.")
         return
 
     version_changed = previous.get("version") != current["version"]
@@ -237,18 +252,19 @@ def main():
         for field in ("etag", "last_modified", "content_length")
     )
 
-    # 버전/URL/CDN 메타데이터가 바뀌었거나 하루에 한 번은 실제 파일 전체를
-    # 다운로드해 SHA-256을 다시 계산합니다. 이렇게 하면 버전 번호가 같아도
-    # setup.exe 내용이 교체된 경우를 감지할 수 있습니다.
+    # 하루 1회 정밀 검사
     deep_check_due = previous.get("last_deep_check") != today
     should_hash = version_changed or url_changed or metadata_changed or deep_check_due
 
     if should_hash:
         file_hash, downloaded_size = download_and_hash(current["setup_url"])
         current["file_sha256"] = file_hash
+
         if not current["content_length"]:
             current["content_length"] = str(downloaded_size)
+
         current["last_deep_check"] = today
+
     else:
         current["file_sha256"] = previous.get("file_sha256", "")
         current["last_deep_check"] = previous.get("last_deep_check", "")
@@ -261,23 +277,26 @@ def main():
     extra_config_changes = get_extra_config_changes(previous, current)
 
     items = []
+
     if version_changed:
         items.append("버전")
+
     if file_changed:
         items.append("배포 파일")
+
     if url_changed and not version_changed:
         items.append("배포 경로")
+
     if config_changed and extra_config_changes:
         items.append("Vanguard 설정")
 
-    # ETag/Last-Modified만 변했지만 실제 파일 해시가 같다면 알림하지 않습니다.
+    # 변경 알림
     if items:
         print("Vanguard change detected:", items)
         send_discord(previous, current, items, version_changed)
     else:
         print("No meaningful Vanguard changes.")
 
-    # 알림 유무와 관계없이 최신 메타데이터/일일 검사 날짜를 저장합니다.
     if current != previous:
         save_state(current)
 
