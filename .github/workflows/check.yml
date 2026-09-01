@@ -9,22 +9,33 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: vanguard-monitor
+  cancel-in-progress: false
+
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v5
 
       - name: Check Vanguard
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        run: python check.py
+        run: python3 check.py
 
-      - name: Save version
+      - name: Save Vanguard state
         run: |
           git config user.name "Vanguard Monitor"
           git config user.email "actions@github.com"
-          git add last_version.txt
-          git diff --cached --quiet || git commit -m "Update Vanguard version"
-          git push
+
+          git add vanguard_state.json
+
+          if ! git diff --cached --quiet; then
+            git commit -m "Update Vanguard state"
+            git pull --rebase
+            git push
+          fi
