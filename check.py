@@ -9,8 +9,8 @@ STATE_FILE = "vanguard_state.json"
 
 WEBHOOK = os.environ["DISCORD_WEBHOOK"]
 
-RIOT_USER_AGENT = "VanguardMonitor/3.2"
-DISCORD_USER_AGENT = "DiscordBot (VanguardMonitor, 3.2)"
+RIOT_USER_AGENT = "VanguardMonitor/3.3"
+DISCORD_USER_AGENT = "DiscordBot (VanguardMonitor, 3.3)"
 KST = timezone(timedelta(hours=9))
 
 
@@ -34,7 +34,7 @@ def sha256_text(text):
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-# 상태 저장
+# 상태
 def load_state():
     try:
         with open(STATE_FILE, "r", encoding="utf-8") as f:
@@ -48,7 +48,7 @@ def save_state(state):
         json.dump(state, f, ensure_ascii=False, indent=2, sort_keys=True)
 
 
-# Vanguard 설정 조회
+# 설정
 def get_vanguard_config():
     req = riot_request(CONFIG_URL)
 
@@ -87,7 +87,7 @@ def get_vanguard_config():
     }
 
 
-# 설치 파일 정보 조회
+# 파일 정보
 def get_installer_metadata(url):
     try:
         req = riot_request(url, method="HEAD")
@@ -119,7 +119,7 @@ def get_installer_metadata(url):
         }
 
 
-# 실제 파일 SHA-256 확인
+# 파일 해시
 def download_and_hash(url):
     print("Checking setup.exe SHA-256...")
 
@@ -139,6 +139,7 @@ def download_and_hash(url):
     return digest.hexdigest(), size
 
 
+# 설정 비교
 def get_extra_config_changes(old, new):
     old_config = old.get("vanguard_config", {})
     new_config = new.get("vanguard_config", {})
@@ -160,7 +161,7 @@ def get_extra_config_changes(old, new):
     return sorted(changed)
 
 
-# Discord 알림
+# 알림
 def send_discord(previous, current, items, version_changed):
     now = datetime.now(KST).strftime("%Y-%m-%d %H:%M KST")
 
@@ -175,14 +176,17 @@ def send_discord(previous, current, items, version_changed):
     item_text = " · ".join(items)
 
     content = (
-        "🚨 **Riot Vanguard 변경 감지**\n\n"
-        "📦 **버전**\n"
-        f"{version_text}\n\n"
-        "🔎 **감지 항목**\n"
-        f"`{item_text}`\n\n"
-        f"🕒 `{now}`\n\n"
-        "@everyone\n\n"
-        "-# made by jnior"
+        "> 🚨 **Riot Vanguard 변경 감지**\n"
+        ">\n"
+        "> 📦 **버전**\n"
+        f"> {version_text}\n"
+        ">\n"
+        "> 🔎 **감지 항목**\n"
+        f"> `{item_text}`\n"
+        ">\n"
+        f"> 🕒 `{now}`\n"
+        "> @everyone\n"
+        "> -# made by jnior"
     )
 
     payload = json.dumps(
@@ -229,7 +233,7 @@ def main():
         "last_deep_check": "",
     }
 
-    # 첫 실행
+    # 최초 실행
     if previous is None:
         file_hash, downloaded_size = download_and_hash(current["setup_url"])
         current["file_sha256"] = file_hash
@@ -252,7 +256,7 @@ def main():
         for field in ("etag", "last_modified", "content_length")
     )
 
-    # 하루 1회 정밀 검사
+    # 정밀 검사
     deep_check_due = previous.get("last_deep_check") != today
     should_hash = version_changed or url_changed or metadata_changed or deep_check_due
 
@@ -290,7 +294,7 @@ def main():
     if config_changed and extra_config_changes:
         items.append("Vanguard 설정")
 
-    # 변경 알림
+    # 변경 확인
     if items:
         print("Vanguard change detected:", items)
         send_discord(previous, current, items, version_changed)
