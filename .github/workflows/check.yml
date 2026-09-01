@@ -1,0 +1,30 @@
+name: Vanguard Monitor
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    - cron: "17,47 * * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Vanguard
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: python check.py
+
+      - name: Save version
+        run: |
+          git config user.name "Vanguard Monitor"
+          git config user.email "actions@github.com"
+          git add last_version.txt
+          git diff --cached --quiet || git commit -m "Update Vanguard version"
+          git push
