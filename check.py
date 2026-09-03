@@ -1,19 +1,51 @@
 import json
 import os
 import hashlib
+import time
 import urllib.request
 from datetime import datetime, timezone, timedelta
 
 CONFIG_URL = "https://clientconfig.rpg.riotgames.com/api/v1/config/public"
 STATE_FILE = "vanguard_state.json"
+STATUS_FILE = "status.json"
+HISTORY_FILE = "history.json"
 
 WEBHOOK = os.environ["DISCORD_WEBHOOK"]
+MODE = os.environ.get("MODE", "check").lower()
 
-RIOT_USER_AGENT = "VanguardMonitor/3.3"
-DISCORD_USER_AGENT = "DiscordBot (VanguardMonitor, 3.3)"
+RIOT_USER_AGENT = "VanguardMonitor/4.0"
+DISCORD_USER_AGENT = "DiscordBot (VanguardMonitor, 4.0)"
 KST = timezone(timedelta(hours=9))
 
 
+# 시간
+def now_kst():
+    return datetime.now(KST)
+
+
+def now_text():
+    return now_kst().strftime("%Y-%m-%d %H:%M KST")
+
+
+def now_iso():
+    return now_kst().isoformat(timespec="seconds")
+
+
+# JSON
+def load_json(path, default):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return default
+
+
+def save_json(path, data):
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2, sort_keys=True)
+
+
+# 요청
 def riot_request(url, method="GET", headers=None):
     final_headers = {
         "User-Agent": RIOT_USER_AGENT,
@@ -30,29 +62,29 @@ def riot_request(url, method="GET", headers=None):
     )
 
 
+def retry(name, func, attempts=3):
+    last_error = None
+
+    for attempt in range(1, attempts + 1):
+        try:
+            return func()
+        except Exception as error:
+            last_error = error
+            print(f"{name} failed ({attempt}/{attempts}): {error}")
+
+            if attempt < attempts:
+                time.sleep(attempt * 5)
+
+    raise last_error
+
+
 def sha256_text(text):
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-# 상태
-def load_state():
-    try:
-        with open(STATE_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return None
-
-
-def save_state(state):
-    with open(STATE_FILE, "w", encoding="utf-8") as f:
-        json.dump(state, f, ensure_ascii=False, indent=2, sort_keys=True)
-
-
 # 설정
 def get_vanguard_config():
-    req = riot_request(CONFIG_URL)
-
-    with urllib.request.urlopen(req, timeout=30) as response:
+    with urllib.request.urlopen(riot_request(CONFIG_URL), timeout=30) as response:
         data = json.load(response)
 
     vanguard_config = {
@@ -90,21 +122,19 @@ def get_vanguard_config():
 # 파일 정보
 def get_installer_metadata(url):
     try:
-        req = riot_request(url, method="HEAD")
-
-        with urllib.request.urlopen(req, timeout=30) as response:
+        with urllib.request.urlopen(riot_request(url, method="HEAD"), timeout=30) as response:
             return {
                 "etag": response.headers.get("ETag", ""),
                 "last_modified": response.headers.get("Last-Modified", ""),
                 "content_length": response.headers.get("Content-Length", ""),
             }
+    except Exception as error:
+        print("HEAD failed:", error)
 
-    except Exception as head_error:
-        print("HEAD failed, trying ranged GET:", head_error)
-
-    req = riot_request(url, headers={"Range": "bytes=0-0"})
-
-    with urllib.request.urlopen(req, timeout=30) as response:
+    with urllib.request.urlopen(
+        riot_request(url, headers={"Range": "bytes=0-0"}),
+        timeout=30,
+    ) as response:
         total_size = response.headers.get("Content-Range", "")
 
         if "/" in total_size:
@@ -121,10 +151,10 @@ def get_installer_metadata(url):
 
 # 파일 해시
 def download_and_hash(url):
-    print("Checking setup.exe SHA-256...")
-
     digest = hashlib.sha256()
     size = 0
+
+    print("Checking setup.exe SHA-256...")
 
     with urllib.request.urlopen(riot_request(url), timeout=300) as response:
         while True:
@@ -161,14 +191,36 @@ def get_extra_config_changes(old, new):
     return sorted(changed)
 
 
-# 알림
-def send_discord(previous, current, items, version_changed):
-    now = datetime.now(KST).strftime("%Y-%m-%d %H:%M KST")
+# Discord
+def post_discord(content, ping=False):
+    payload = {
+        "content": content,
+        "allowed_mentions": {
+            "parse": ["everyone"] if ping else []
+        },
+    }
 
+    data = json.dumps(payload).encode("utf-8")
+
+    req = urllib.request.Request(
+        WEBHOOK,
+        data=data,
+        headers={
+            "Content-Type": "application/json",
+            "User-Agent": DISCORD_USER_AGENT,
+        },
+        method="POST",
+    )
+
+    with urllib.request.urlopen(req, timeout=30) as response:
+        response.read()
+
+
+def send_change(previous, current, items):
     old_version = previous.get("version", "?")
     new_version = current.get("version", "?")
 
-    if version_changed:
+    if old_version != new_version:
         version_text = f"`{old_version}` → `{new_version}`"
     else:
         version_text = f"`{new_version}` (동일)"
@@ -184,42 +236,115 @@ def send_discord(previous, current, items, version_changed):
         "> 🔎 **감지 항목**\n"
         f"> `{item_text}`\n"
         ">\n"
-        f"> 🕒 `{now}`\n"
+        f"> 🕒 `{now_text()}`\n"
         "> @everyone\n"
         "> -# made by jnior"
     )
 
-    payload = json.dumps(
-        {
-            "content": content,
-            "allowed_mentions": {"parse": ["everyone"]},
-        }
-    ).encode("utf-8")
+    post_discord(content, ping=True)
 
-    req = urllib.request.Request(
-        WEBHOOK,
-        data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "User-Agent": DISCORD_USER_AGENT,
-        },
-        method="POST",
+
+def send_test():
+    content = (
+        "> 🧪 **Vanguard Monitor 테스트**\n"
+        ">\n"
+        "> ✅ 알림이 정상적으로 작동합니다.\n"
+        f"> 🕒 `{now_text()}`\n"
+        "> @everyone\n"
+        "> -# made by jnior"
     )
 
-    with urllib.request.urlopen(req, timeout=30) as response:
-        response.read()
-
-    print("Discord notification sent.")
+    post_discord(content, ping=True)
 
 
-def main():
-    print("Checking Riot Vanguard...")
+def send_error(error_count, error_text):
+    short_error = error_text.replace("\n", " ")[:180]
 
-    previous = load_state()
-    config = get_vanguard_config()
-    metadata = get_installer_metadata(config["setup_url"])
+    content = (
+        "> ⚠️ **Vanguard Monitor 오류**\n"
+        ">\n"
+        f"> 연속 `{error_count}회` 검사에 실패했습니다.\n"
+        f"> `{short_error}`\n"
+        ">\n"
+        f"> 🕒 `{now_text()}`\n"
+        "> @everyone\n"
+        "> -# made by jnior"
+    )
 
-    today = datetime.now(KST).strftime("%Y-%m-%d")
+    post_discord(content, ping=True)
+
+
+# 기록
+def load_history():
+    data = load_json(HISTORY_FILE, [])
+
+    if isinstance(data, list):
+        return data
+
+    return []
+
+
+def add_history(previous, current, items, fingerprint):
+    history = load_history()
+
+    history.insert(
+        0,
+        {
+            "time": now_iso(),
+            "old_version": previous.get("version", ""),
+            "new_version": current.get("version", ""),
+            "items": items,
+            "old_sha256": previous.get("file_sha256", ""),
+            "new_sha256": current.get("file_sha256", ""),
+            "fingerprint": fingerprint,
+        },
+    )
+
+    save_json(HISTORY_FILE, history[:100])
+
+
+def save_status(state, healthy, error=""):
+    status = {
+        "healthy": healthy,
+        "version": state.get("version", ""),
+        "last_success": state.get("last_success", ""),
+        "last_deep_check": state.get("last_deep_check", ""),
+        "consecutive_failures": state.get("consecutive_failures", 0),
+        "file_sha256": state.get("file_sha256", ""),
+    }
+
+    if error:
+        status["error"] = error[:300]
+
+    save_json(STATUS_FILE, status)
+
+
+def make_fingerprint(current):
+    data = {
+        "version": current.get("version", ""),
+        "setup_url": current.get("setup_url", ""),
+        "config_hash": current.get("config_hash", ""),
+        "file_sha256": current.get("file_sha256", ""),
+    }
+
+    return sha256_text(
+        json.dumps(data, sort_keys=True, separators=(",", ":"))
+    )
+
+
+# 검사
+def run_check():
+    previous = load_json(STATE_FILE, {})
+    initialized = bool(
+        previous.get("version")
+        and previous.get("file_sha256")
+    )
+
+    config = retry("Config", get_vanguard_config)
+    metadata = retry(
+        "Metadata",
+        lambda: get_installer_metadata(config["setup_url"]),
+    )
 
     current = {
         "version": config["version"],
@@ -229,20 +354,32 @@ def main():
         "etag": metadata["etag"],
         "last_modified": metadata["last_modified"],
         "content_length": metadata["content_length"],
-        "file_sha256": "",
-        "last_deep_check": "",
+        "file_sha256": previous.get("file_sha256", ""),
+        "last_deep_check": previous.get("last_deep_check", ""),
+        "last_success": now_iso(),
+        "consecutive_failures": 0,
+        "error_alerted": False,
+        "last_notified_fingerprint": previous.get("last_notified_fingerprint", ""),
     }
 
     # 최초 실행
-    if previous is None:
-        file_hash, downloaded_size = download_and_hash(current["setup_url"])
+    if not initialized:
+        file_hash, downloaded_size = retry(
+            "SHA-256",
+            lambda: download_and_hash(current["setup_url"]),
+        )
+
         current["file_sha256"] = file_hash
+        current["last_deep_check"] = now_iso()
 
         if not current["content_length"]:
             current["content_length"] = str(downloaded_size)
 
-        current["last_deep_check"] = today
-        save_state(current)
+        save_json(STATE_FILE, current)
+        save_status(current, True)
+
+        if not os.path.exists(HISTORY_FILE):
+            save_json(HISTORY_FILE, [])
 
         print("Initial state saved.")
         return
@@ -257,21 +394,27 @@ def main():
     )
 
     # 정밀 검사
-    deep_check_due = previous.get("last_deep_check") != today
-    should_hash = version_changed or url_changed or metadata_changed or deep_check_due
+    last_deep = str(previous.get("last_deep_check", ""))
+    deep_check_due = last_deep[:10] != now_kst().strftime("%Y-%m-%d")
+    should_hash = (
+        version_changed
+        or url_changed
+        or config_changed
+        or metadata_changed
+        or deep_check_due
+    )
 
     if should_hash:
-        file_hash, downloaded_size = download_and_hash(current["setup_url"])
+        file_hash, downloaded_size = retry(
+            "SHA-256",
+            lambda: download_and_hash(current["setup_url"]),
+        )
+
         current["file_sha256"] = file_hash
+        current["last_deep_check"] = now_iso()
 
         if not current["content_length"]:
             current["content_length"] = str(downloaded_size)
-
-        current["last_deep_check"] = today
-
-    else:
-        current["file_sha256"] = previous.get("file_sha256", "")
-        current["last_deep_check"] = previous.get("last_deep_check", "")
 
     file_changed = (
         bool(previous.get("file_sha256"))
@@ -294,15 +437,65 @@ def main():
     if config_changed and extra_config_changes:
         items.append("Vanguard 설정")
 
-    # 변경 확인
+    # 중복 방지
     if items:
-        print("Vanguard change detected:", items)
-        send_discord(previous, current, items, version_changed)
-    else:
-        print("No meaningful Vanguard changes.")
+        fingerprint = make_fingerprint(current)
 
-    if current != previous:
-        save_state(current)
+        if fingerprint != previous.get("last_notified_fingerprint", ""):
+            send_change(previous, current, items)
+            add_history(previous, current, items, fingerprint)
+            current["last_notified_fingerprint"] = fingerprint
+            print("Change notification sent:", items)
+        else:
+            print("Duplicate notification skipped.")
+
+    save_json(STATE_FILE, current)
+    save_status(current, True)
+
+    if not os.path.exists(HISTORY_FILE):
+        save_json(HISTORY_FILE, [])
+
+    print("Check completed.")
+
+
+# 오류
+def handle_error(error):
+    state = load_json(STATE_FILE, {})
+
+    failures = int(state.get("consecutive_failures", 0)) + 1
+    state["consecutive_failures"] = failures
+
+    error_text = f"{type(error).__name__}: {error}"
+    already_alerted = bool(state.get("error_alerted", False))
+
+    if failures >= 3 and not already_alerted:
+        try:
+            send_error(failures, error_text)
+            state["error_alerted"] = True
+        except Exception as discord_error:
+            print("Error alert failed:", discord_error)
+
+    save_json(STATE_FILE, state)
+    save_status(state, False, error_text)
+
+    if not os.path.exists(HISTORY_FILE):
+        save_json(HISTORY_FILE, [])
+
+    raise error
+
+
+def main():
+    if MODE == "test":
+        print("Sending test notification...")
+        retry("Discord test", send_test)
+        return
+
+    print("Checking Riot Vanguard...")
+
+    try:
+        run_check()
+    except Exception as error:
+        handle_error(error)
 
 
 if __name__ == "__main__":
