@@ -2,9 +2,22 @@ name: Vanguard Monitor
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "실행 모드"
+        required: true
+        default: "check"
+        type: choice
+        options:
+          - check
+          - test
+
+  repository_dispatch:
+    types:
+      - vanguard-check
 
   schedule:
-    - cron: "17,47 * * * *"
+    - cron: "7,22,37,52 * * * *"
 
 permissions:
   contents: write
@@ -16,26 +29,43 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
       - name: Check Vanguard
+        id: monitor
+        continue-on-error: true
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'check' }}
         run: python3 check.py
 
-      - name: Save Vanguard state
+      - name: Save monitor data
+        if: always()
         run: |
           git config user.name "Vanguard Monitor"
           git config user.email "actions@github.com"
 
-          git add vanguard_state.json
+          git add vanguard_state.json status.json history.json
 
           if ! git diff --cached --quiet; then
-            git commit -m "Update Vanguard state"
-            git pull --rebase
-            git push
+            git commit -m "Update Vanguard monitor data"
+
+            pushed=false
+            for i in 1 2 3; do
+              if git pull --rebase && git push; then
+                pushed=true
+                break
+              fi
+              sleep 5
+            done
+
+            $pushed
           fi
+
+      - name: Report failure
+        if: steps.monitor.outcome == 'failure'
+        run: exit 1
