@@ -192,6 +192,21 @@ def get_extra_config_changes(old, new):
 
 
 # Discord
+def short_hash(value):
+    if not value:
+        return "확인 불가"
+    return value[:12] + "..."
+
+
+def format_size(value):
+    try:
+        size = int(value)
+    except (TypeError, ValueError):
+        return "확인 불가"
+
+    return f"{size / 1024 / 1024:.2f} MB"
+
+
 def post_discord(content, ping=False):
     payload = {
         "content": content,
@@ -225,20 +240,31 @@ def send_change(previous, current, items):
     else:
         version_text = f"`{new_version}` (동일)"
 
-    item_text = " · ".join(items)
+    item_lines = []
+
+    for item in items:
+        item_lines.append(f"• **{item}**")
+
+        if item == "배포 파일":
+            old_hash = short_hash(previous.get("file_sha256"))
+            new_hash = short_hash(current.get("file_sha256"))
+            old_size = format_size(previous.get("content_length"))
+            new_size = format_size(current.get("content_length"))
+
+            item_lines.append(f"  SHA-256: `{old_hash}` → `{new_hash}`")
+            item_lines.append(f"  크기: `{old_size}` → `{new_size}`")
+
+    item_text = "\n".join(item_lines)
 
     content = (
-        "> 🚨 **Riot Vanguard 변경 감지**\n"
-        ">\n"
-        "> 📦 **버전**\n"
-        f"> {version_text}\n"
-        ">\n"
-        "> 🔎 **감지 항목**\n"
-        f"> `{item_text}`\n"
-        ">\n"
-        f"> 🕒 `{now_text()}`\n"
-        "> @everyone\n"
-        "> -# made by jnior"
+        ">>> 🚨 **Riot Vanguard 변경 감지**\n\n"
+        "📦 **버전**\n"
+        f"{version_text}\n\n"
+        "🔎 **감지 항목**\n"
+        f"{item_text}\n\n"
+        f"🕒 `{now_text()}`\n"
+        "@everyone\n"
+        "-# made by jnior"
     )
 
     post_discord(content, ping=True)
@@ -246,12 +272,11 @@ def send_change(previous, current, items):
 
 def send_test():
     content = (
-        "> 🧪 **Vanguard Monitor 테스트**\n"
-        ">\n"
-        "> ✅ 알림이 정상적으로 작동합니다.\n"
-        f"> 🕒 `{now_text()}`\n"
-        "> @everyone\n"
-        "> -# made by jnior"
+        ">>> 🧪 **Vanguard Monitor 테스트**\n\n"
+        "✅ 알림이 정상적으로 작동합니다.\n"
+        f"🕒 `{now_text()}`\n"
+        "@everyone\n"
+        "-# made by jnior"
     )
 
     post_discord(content, ping=True)
@@ -261,14 +286,12 @@ def send_error(error_count, error_text):
     short_error = error_text.replace("\n", " ")[:180]
 
     content = (
-        "> ⚠️ **Vanguard Monitor 오류**\n"
-        ">\n"
-        f"> 연속 `{error_count}회` 검사에 실패했습니다.\n"
-        f"> `{short_error}`\n"
-        ">\n"
-        f"> 🕒 `{now_text()}`\n"
-        "> @everyone\n"
-        "> -# made by jnior"
+        ">>> ⚠️ **Vanguard Monitor 오류**\n\n"
+        f"연속 `{error_count}회` 검사에 실패했습니다.\n"
+        f"`{short_error}`\n\n"
+        f"🕒 `{now_text()}`\n"
+        "@everyone\n"
+        "-# made by jnior"
     )
 
     post_discord(content, ping=True)
