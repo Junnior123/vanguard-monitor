@@ -1,15 +1,15 @@
 {
-  "config_hash": "9c52286a4d926f96db1b1cb82fbe3113a192382a35982d68db99e0aa75307eb1",
+  "config_hash": "68be10f8d6bde01758d140af5019014884089af82659d3bf1d993c9088710e31",
   "consecutive_failures": 0,
-  "content_length": "118995440",
+  "content_length": "118399776",
   "error_alerted": false,
-  "etag": "\"5918116be8e01e35884f43ce5ccbc96f-15\"",
-  "file_sha256": "0ed0c2d070858d2db5b53aa8c7ddd6a0f69ab15f4d67fdbb297797d6f6ef8130",
-  "last_deep_check": "2026-09-10T01:33:15+09:00",
-  "last_modified": "Fri, 04 Sep 2026 22:27:41 GMT",
-  "last_notified_fingerprint": "04a707c5189c5d9ff9bdb825dee7779c6b3c9f2c6be3648240d7465f12652043",
-  "last_success": "2026-09-10T22:48:50+09:00",
-  "setup_url": "https://riot-client.secure.dyn.riotcdn.net/channels/public/rccontent/vanguard/1.19.0.6/setup.exe",
+  "etag": "\"5e7721babaf8001d5fd9bc644970a02c-15\"",
+  "file_sha256": "2cab7314222bc682a85f5172cd579636b858ac97977e3a006eb3e77c8a2c7275",
+  "last_deep_check": "2026-09-11T02:19:41+09:00",
+  "last_modified": "Fri, 04 Sep 2026 22:27:43 GMT",
+  "last_notified_fingerprint": "30a29cc838270bb0e5a35b5048865c8a1743708720588f65d0f4aab1f75bd5f2",
+  "last_success": "2026-09-11T02:19:40+09:00",
+  "setup_url": "https://riot-client.secure.dyn.riotcdn.net/channels/public/rccontent/vanguard/1.19.1.8/setup.exe",
   "vanguard_config": {
     "anticheat.vanguard.backgroundInstall": false,
     "anticheat.vanguard.enabled": true,
@@ -18,7 +18,7 @@
       "1.16.15.9"
     ],
     "anticheat.vanguard.url": "https://riot-client.secure.dyn.riotcdn.net/channels/public/rccontent/vanguard/{version}/setup.exe",
-    "anticheat.vanguard.version": "1.19.0.6"
+    "anticheat.vanguard.version": "1.19.1.8"
   },
-  "version": "1.19.0.6"
+  "version": "1.19.1.8"
 }
