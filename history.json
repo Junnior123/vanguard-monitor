@@ -1,5 +1,16 @@
 [
   {
+    "fingerprint": "8a8a3d550a79b98bf7c00502c5d582760ffc434b090882e67d293654492fd224",
+    "items": [
+      "배포 파일"
+    ],
+    "new_sha256": "e82d9090e8c730bd9ed14ea44c8a0e6745ee27ce29f8c71644ef8229cf7cd6a1",
+    "new_version": "1.19.1.18",
+    "old_sha256": "c71b1dd24d93d4697a556635f4274e9cecef492451e33cf8be095cdbf72fb1da",
+    "old_version": "1.19.1.18",
+    "time": "2026-10-28T03:13:21+09:00"
+  },
+  {
     "fingerprint": "00383b37494e1ea661b1be1ff87dc3b915b8e7481d6bb9f8c62d2edc122a83c2",
     "items": [
       "배포 파일"
