@@ -8,7 +8,7 @@
   "last_deep_check": "2026-11-08T03:15:42+09:00",
   "last_modified": "Thu, 05 Nov 2026 14:50:14 GMT",
   "last_notified_fingerprint": "86ca74dcb311c040f89eeb9d6fb8f2ee7b401601eb38619b82ed933ffec44194",
-  "last_success": "2026-11-08T03:15:38+09:00",
+  "last_success": "2026-11-08T07:01:03+09:00",
   "setup_url": "https://riot-client.secure.dyn.riotcdn.net/channels/public/rccontent/vanguard/1.19.1.18/setup.exe",
   "vanguard_config": {
     "anticheat.vanguard.backgroundInstall": false,
