@@ -5,10 +5,10 @@
   "error_alerted": false,
   "etag": "\"4f89bf55b8e4adf361a74ffb2ac4891b-21\"",
   "file_sha256": "700bfd4a65ca56f342e705bfba405115ea14c3977e12fbed42c7114c386bc62c",
-  "last_deep_check": "2026-11-10T05:12:10+09:00",
-  "last_modified": "Thu, 05 Nov 2026 14:50:17 GMT",
+  "last_deep_check": "2026-11-10T11:48:03+09:00",
+  "last_modified": "Mon, 09 Nov 2026 21:22:33 GMT",
   "last_notified_fingerprint": "329b472dfc9bccc468a2398401eed5c26744dd5c118a7dde144cc0624b5cfd95",
-  "last_success": "2026-11-10T05:12:10+09:00",
+  "last_success": "2026-11-10T11:48:02+09:00",
   "setup_url": "https://riot-client.secure.dyn.riotcdn.net/channels/public/rccontent/vanguard/1.19.2.20/setup.exe",
   "vanguard_config": {
     "anticheat.vanguard.backgroundInstall": false,
