@@ -1,5 +1,17 @@
 [
   {
+    "fingerprint": "9bddfc0227a61dc5e0dcd43ac5261fd01c0a5101f6e6588684de8a245461f4d2",
+    "items": [
+      "버전",
+      "배포 파일"
+    ],
+    "new_sha256": "004b02673529d275043fcd29590046107575de7e0473ccc81b485ee79e3dc517",
+    "new_version": "1.19.2.23",
+    "old_sha256": "c46e2e6346e60364a7d61ae91b34a45fd7c2684648dff4a0e01fe9e4735c3655",
+    "old_version": "1.19.2.21",
+    "time": "2026-11-13T19:50:33+09:00"
+  },
+  {
     "fingerprint": "0066a9643f9459e2d1b3cde09a7999a08497c32f03a0a971c413ef9d8f73d89c",
     "items": [
       "버전",
