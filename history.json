@@ -1,5 +1,17 @@
 [
   {
+    "fingerprint": "8dd57f274b280a2196efb544eddcbf47e095170a64d10ebe30350c063bd91b90",
+    "items": [
+      "버전",
+      "배포 파일"
+    ],
+    "new_sha256": "40adfabe8fc90d29a883a5f7de2c62850bfa95355cca9a63e3ad3440636f08b8",
+    "new_version": "1.19.3.24",
+    "old_sha256": "c60d6023796af1cfa55f4043d835f3dc6d78f38a3bff938c7c5da7d6dca131e9",
+    "old_version": "1.19.3.23",
+    "time": "2026-11-26T21:52:46+09:00"
+  },
+  {
     "fingerprint": "c5de92a2905d2b3ccd7fb27772244b6aec44088b52794cc80978326e6d9fc6c5",
     "items": [
       "버전",
